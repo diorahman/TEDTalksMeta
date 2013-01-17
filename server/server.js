@@ -4,6 +4,9 @@ var request = require('request')
 var lela = require('./lib/lela')
 var Step = require('step')
 var cheerio = require('cheerio')
+var xml2js = require('xml2js')
+
+var parser = new xml2js.Parser()
 var server = express()
 
 var userAgent = 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'
@@ -105,10 +108,21 @@ function span2arr(span){
 }
 
 function title2Alt(title, speaker){
-  if(title.indexOf(':') > -1){
-    return title.split(':')[1].trim()
+	var arr = []
+
+	if(title.indexOf(':') > -1){
+    	arr = title.split(':');
+  	}else{
+    	arr = title.split(speaker.name);
+    }
+
+  if(arr.length > 1){
+  	if(arr[0].indexOf(speaker.name) > -1)
+  		return arr[1].trim();
+  	else
+  		return title;
   }else{
-    return title.split(speaker.name)[1].trim()
+  	return title;
   }
 }
 
@@ -157,6 +171,7 @@ function getPageData(body, callback){
 // TEDTalks API
 var TEDServerRootUrl = "http://www.ted.com"
 var TEDServerBrowseUrl = "/talks/browse.json"
+var TEDServerFeedUrl = 'http://feeds.feedburner.com/tedtalks_video'
 
 var orders = {
 	'newest' : 'newest',
@@ -186,6 +201,7 @@ var tags = {
 }
 
 var images = {
+	'talk-small-thumb' : '74x56',
 	'talk-thumb' : '113x85',
 	'talk-small' : '240x180',
 	'talk-medium' : '389x292',
@@ -220,6 +236,11 @@ server.get('/browse', function(req, res){
 		for(var key in obj.main){
 			retObj.talks.push(obj.main[key])
 		}
+
+		retObj.imageSize = images
+		retObj.imageFormat = ".jpg"
+		retObj.imageSeparator = "_"
+
 		res.send(retObj)
 	})
 })
@@ -262,7 +283,61 @@ server.get('/info', function(req, res){
 })
 
 server.get('/search', function(req, res, next){
-	res.send({'endpoint' : 'search'})
+	var q = req.query.q ? req.query.q  : ''
+	var page = req.query.page ? req.query.page : 1
+	var qs = {cat : 'ss_talks'}
+
+	qs.page = page
+	qs.q = q
+
+	request({ url : TEDServerRootUrl + '/search', qs : qs, headers : headers}, function(err, response, body){
+
+		var $ = cheerio.load(body)
+		var resultText = $('.search-title').children('span').text()
+		var arr = resultText.split(' ')
+		var obj = { status : "success", total : 0, page : page, talks : []}
+
+	if(arr.length > 1){
+
+		obj.total = parseInt(arr[2].trim())
+
+		var pages = Math.floor(obj.total * 0.1)
+		var mod = obj.total - pages;
+		pages = pages + mod;
+
+		obj.pages = pages;
+
+		if(page > obj.pages) return next(new Error('Index out of range'))
+
+
+		$('.video').each(function(){
+
+			var talk = {
+				tTitle : $(this).children('h5').text(),
+				altTitle : $(this).children('h5').text(),
+				blurb : $($(this).find('.desc')[0]).html(),
+				talkLink : $(this).children('h5').children('a').attr('href'),
+				image : $(this).children('.thumb').children('a').children('img').attr('src')
+			}
+
+			talk.image = talk.image.substring(0, talk.image.lastIndexOf('_'));
+			obj.talks.push(talk)
+		})
+
+		obj.totalCurrentPage = obj.talks.length
+
+		obj.imageSize = images
+		obj.imageFormat = ".jpg"
+		obj.imageSeparator = "_"
+
+		res.send(obj)
+
+	}else{
+		res.send(obj)
+	}
+
+	})
+
 })
 
 server.get('/speaker', function(req, res, next){
@@ -270,7 +345,41 @@ server.get('/speaker', function(req, res, next){
 })
 
 server.get('/feed', function(req, res, next){
-	res.send({'endpoint' : 'feed'})
+	request(TEDServerFeedUrl, function(err, response, body){
+		if(err) next(err)
+	parser.parseString(body, function (err, result) {
+		if(err) next(err)
+		var talks = result.rss.channel[0].item
+		var retObj = { status : "success", talks : []}
+
+		for(var i = 0; i < talks.length; i++){
+			var talk = talks[i]
+			var obj = {
+				id : talk['jwplayer:talkId'][0],
+				tTitle : talk['itunes:subtitle'][0],
+				altTitle : title2Alt(talk['itunes:subtitle'][0], {name: talk['itunes:author'][0]}),
+				blurb : talk['itunes:summary'][0],
+				speaker : { name : talk['itunes:author'][0]},
+				image : (talk['itunes:image'][0]['$']).url,
+				talkLink : talk['link'][0],
+				duration : talk['itunes:duration'][0],
+				talkpDate : talk['pubDate'][0]
+			}
+
+			obj.image = obj.image.substring(0, obj.image.lastIndexOf('_'));
+			
+			var paths = url.parse(obj.talkLink).path.split('/');
+			obj.talkLink = '/talks/' + paths[paths.length - 1]
+
+			retObj.talks.push(obj)
+		}
+
+		retObj.imageSize = images
+		retObj.imageFormat = ".jpg"
+		retObj.imageSeparator = "_"
+		res.send(retObj)
+	})
+})
 })
 
 server.listen(process.env.VMC_APP_PORT || 1337, null);
