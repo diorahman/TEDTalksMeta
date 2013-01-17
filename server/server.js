@@ -64,6 +64,7 @@ function getDataId($, callback){
 
 function getSpeaker($, callback){
   var obj = {name: $('.speaker-photo').attr('alt'), photoUrl : $('.speaker-photo').attr('src')}
+  obj.photoUrl = obj.photoUrl.substring(0, obj.photoUrl.lastIndexOf('_')) 
   
   // document.querySelector('.talk-intro').children[1].querySelector('a').href
   obj.bioLink = $($($('.talk-intro').children()[1]).find('a')[0]).attr('href')
@@ -148,17 +149,14 @@ function getPageData(body, callback){
           video : video,
           subtitle : subtitle
         }
-
         callback(err, retObj)
-
-        
       }
       )
 }
 
 // TEDTalks API
 var TEDServerRootUrl = "http://www.ted.com"
-var TEDServerBrowseUrl = "/browse.json"
+var TEDServerBrowseUrl = "/talks/browse.json"
 
 var orders = {
 	'newest' : 'newest',
@@ -192,17 +190,17 @@ var images = {
 	'talk-small' : '240x180',
 	'talk-medium' : '389x292',
 	'talk-big' : '800x600',
-	'author-big' : '50x50',
-	'author-small' : '254x191'
+	'author-small' : '50x50',
+	'author-big' : '254x191'
 }
 
 server.use(errorHandler)
 
-server.get('/misc', function(req, res){
-	var obj = {
-		orders : orders, tags : tags, images : images
-	}
-	res.send(obj)
+server.get('/', function(req, res, next){
+	var get = server.routes.get 
+	var paths = []
+	for(var i = 0; i < get.length; i++) paths.push(get[i].path)
+	res.send({paths : paths})
 })
 
 server.get('/browse', function(req, res){
@@ -212,7 +210,7 @@ server.get('/browse', function(req, res){
 
 	var qs = { tagid : tagid, orderedby : orderedby}
 
-	request({url : url, qs : qs, headers : headers}, function(err, res, body){
+	request({url : url, qs : qs, headers : headers}, function(err, response, body){
 		if(err) return next(err)
 
 		var obj = JSON.parse(body)
@@ -224,24 +222,19 @@ server.get('/browse', function(req, res){
 	})
 })
 
-server.get('/search', function(req, res, next){
-
-})
-
-server.get('/speaker', function(req, res, next){
-
-})
-
 server.get('/subtitle', function(req, res, next){
 	var id = req.query.id
 	var lang = req.query.lang
 	var url = TEDServerRootUrl + '/talks/subtitles/id/' + id + '/lang/' + lang 
-	request({url : url, headers : headers}).pipe(res)
+	request({url : url, headers : headers}, function(err, respose, body){
+		if(err) return next(err)
+		res.send(body)
+	})
 })
 
 server.get('/talk', function(req, res, next){
 
-	var talkLink = req.query.talk_link ? req.query.talk_link : ''
+	var talkLink = req.query.link ? req.query.link : ''
 	if(talkLink.length == 0) next(new Error("url invalid"))
 
 	var url = TEDServerRootUrl + talkLink
@@ -252,9 +245,30 @@ server.get('/talk', function(req, res, next){
 		getPageData(body, function(err, obj){
 			if(err) return next(err)
 			obj.imageSize = images
+			obj.imageFormat = ".jpg"
+			obj.imageSeparator = "_"
 			res.send(obj)
 		})
 	})
 })
 
-server.listen(8000)
+server.get('/info', function(req, res){
+	var obj = {
+		orders : orders, tags : tags, images : images
+	}
+	res.send(obj)
+})
+
+server.get('/search', function(req, res, next){
+	res.send({'endpoint' : 'search'})
+})
+
+server.get('/speaker', function(req, res, next){
+	res.send({'endpoint' : 'speaker'})
+})
+
+server.get('/feed', function(req, res, next){
+	res.send({'endpoint' : 'feed'})
+})
+
+server.listen(process.env.VMC_APP_PORT || 1337, null);
