@@ -19,20 +19,43 @@ function errorHandler(err, req, res, next) {
 }
 
 // helper
+String.prototype.capitalize = function() {
+    return this.charAt(0).toUpperCase() + this.slice(1);
+}
+
 function getRedirectedUrl(id, url, callback){
 	request({ url : url, followRedirect : false}, function(err, res, body){
-    callback(err, {location: res.headers.location, quality : id})
+    	callback(err, {location: res.headers.location, quality : id})
 	})
 }
 
-function getStreamUrl(body, callback){
-  var a = body.indexOf('htmlPlayerStreams');
+function getStreamUrl($, callback){
+
+	var scripts = $('script')
+	var script = ''
+	for(var i = 0; i < scripts.length; i++){
+		if($(scripts[i]).text().indexOf('talkDetails') > -1) 
+			{
+				script = $(scripts[i]).text(); 
+				break;
+			}
+	}
+
+	if(script.length > 0){
+		eval(script)
+		lela(getRedirectedUrl, talkDetails.htmlStreams, callback)
+	}else{
+		callback(null, [])
+	}
+
+  /*var a = body.indexOf('htmlPlayerStreams');
   var b = body.indexOf('analyticsCategory');
   var c = body.substring(a,b);
   var str = 'var ' + c.substring(0,c.lastIndexOf(';'));
-  eval(str)
+  console.log(str)
+  //eval(str)
 
-  lela(getRedirectedUrl, htmlPlayerStreams, callback)
+  //lela(getRedirectedUrl, htmlPlayerStreams, callback)*/
 }
 
 function getSubtitles($, callback){
@@ -67,10 +90,28 @@ function getDataId($, callback){
 
 function getSpeaker($, callback){
   var obj = {name: $('.speaker-photo').attr('alt'), photoUrl : $('.speaker-photo').attr('src')}
-  obj.photoUrl = obj.photoUrl.substring(0, obj.photoUrl.lastIndexOf('_')) 
+  
+  if(obj.photoUrl) obj.photoUrl = obj.photoUrl.substring(0, obj.photoUrl.lastIndexOf('_')) 
   
   // document.querySelector('.talk-intro').children[1].querySelector('a').href
   obj.bioLink = $($($('.talk-intro').children()[1]).find('a')[0]).attr('href')
+  if(!obj.name && obj.bioLink){
+  	var arr = obj.bioLink.split('/');
+  	console.log(arr.length)
+  	if(arr.length > 1){
+  		var str = arr[2].substring(0, arr[2].lastIndexOf('.'))
+  		
+  		var arr1 = str.split('_');
+  		obj.name = ''
+  		for(var i = 0; i < arr1.length; i++){
+  			obj.name += arr1[i].capitalize() + ' '
+  		}
+  		obj.name = obj.name.trim()
+  	}
+  	
+  }
+
+  
   
   if($('q')){
     obj.quote = $('q').text()
@@ -129,9 +170,10 @@ function title2Alt(title, speaker){
 function getPageData(body, callback){
   var $ = cheerio.load(body)
 
+  
   Step(
       function getStuff() {
-        getStreamUrl(body, this.parallel())
+        getStreamUrl($, this.parallel())
         getMetas($, this.parallel())
         getSubtitles($, this.parallel())
         getDataId($, this.parallel())
@@ -144,7 +186,7 @@ function getPageData(body, callback){
       // Show the result when done
       function showStuff(err, video, meta, subtitle, id, speaker, comments, views, talkMeta) {
         if (err) throw err;
-
+        
         var retObj = {
           id : id.id,
           talkDuration : s2m(meta['video:duration']),
@@ -272,6 +314,7 @@ server.get('/talk', function(req, res, next){
 			obj.imageSeparator = "_"
 			res.send(obj)
 		})
+
 	})
 })
 
