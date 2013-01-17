@@ -208,7 +208,9 @@ server.get('/browse', function(req, res){
 	var tagid = req.query.tag ? tags[req.query.tag] : ''
 	var orderedby = req.query.orderedby ? orderedby : ''
 
-	var qs = { tagid : tagid, orderedby : orderedby}
+	var qs = {}
+
+	if(tagid || orderedby) qs = { tagid : tagid, orderedby : orderedby}
 
 	request({url : url, qs : qs, headers : headers}, function(err, response, body){
 		if(err) return next(err)
