@@ -259,6 +259,14 @@ server.get('/', function(req, res, next){
 	var paths = []
 	for(var i = 0; i < get.length; i++) paths.push(get[i].path)
 	res.send({paths : paths})
+
+	/*
+		/browse tag=&orderedby=
+		/subtitle id=&lang=
+		/talk link
+		/info
+	*/
+
 })
 
 server.get('/browse', function(req, res){
@@ -320,7 +328,11 @@ server.get('/talk', function(req, res, next){
 
 server.get('/info', function(req, res){
 	var obj = {
-		orders : orders, tags : tags, images : images
+		orders : orders, tags : tags, images : images,
+		browse: { params: ['tag', 'orderedby']},
+		talk: { params: ['link']},
+		search: { params: ['q', 'page']},
+		feed : {}
 	}
 	res.send(obj)
 })

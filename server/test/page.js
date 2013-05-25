@@ -135,14 +135,7 @@ function getPageData(body){
           meta : span2arr(talkMeta.span),
           video : video,
           subtitle : subtitle
-        }
-
-        console.log(retObj)
-        
+        }        
       }
       )
 }
-  
-request('http://www.ted.com/talks/karen_thompson_walker_what_fear_can_teach_us.html', function(err, res, body){
-  getPageData(body)
-})
