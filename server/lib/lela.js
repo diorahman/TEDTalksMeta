@@ -1,5 +1,7 @@
 /*
     Parallel arguments
+    Copyright 2011 Dhi Aurrahman diorahman@rockybars.com
+    License MIT
 */
 
 function lela(fn, args, cb_){
